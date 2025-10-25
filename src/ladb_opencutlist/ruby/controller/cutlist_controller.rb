@@ -76,6 +76,10 @@ module Ladb::OpenCutList
         write_parts_command(settings)
       end
 
+      PLUGIN.register_command("cutlist_get_processors") do |settings|
+        get_processors(settings)
+      end
+
       PLUGIN.register_command("cutlist_group_cuttingdiagram1d_start") do |settings|
         group_cuttingdiagram1d_start_command(settings)
       end
@@ -424,6 +428,21 @@ module Ladb::OpenCutList
 
       # Run !
       worker.run
+    end
+
+    def get_processors(settings)
+      processors = []
+      processors_directory = File.join(PLUGIN_DIR, 'posts')
+      files = Dir.entries(processors_directory).select { |f| !File.directory?(f) }
+      files.each do |file|
+        relative_path = File.absolute_path(file, processors_directory)
+        load relative_path
+        processor_name = File.basename(file, File.extname(file))
+        module_name = "#{processor_name.capitalize}Processor"
+        infos_processor = Object.const_get(module_name)._get_infos()
+        processors.push(infos_processor)
+      end
+      return {:processors => processors}
     end
 
   end

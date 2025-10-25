@@ -409,6 +409,7 @@ tab:
       write_3d: Géométrie 3D
       write_2d_parts: Exporter la projection 2D des pièces
       write_3d_parts: Exporter la géométrie 3D des pièces
+      write_process_parts: Exporter vers un processeur CNC
       group_write_2d_parts: Exporter la projection 2D des pièces du groupe
       group_write_3d_parts: Exporter la géométrie 3D des pièces du groupe
       group_layout_parts: Imprimer le dessin d'ensemble des pièces du groupe
@@ -1431,6 +1432,11 @@ tab:
         Ce module vous permet d'exporter la **projection 2D** des pièces sous forme de fichiers au format [SVG](https://wikipedia.org/wiki/Scalable_Vector_Graphics) ou [DXF](https://wikipedia.org/wiki/AutoCAD_DXF).
       info_3d: |
         Ce module vous permet d'exporter la **géométrie 3D** des pièces sous forme de fichiers au format [STL](https://wikipedia.org/wiki/STL_(file_format)) ou [OBJ](https://wikipedia.org/wiki/Wavefront_.obj_file).
+      info_process: |
+        Ce module vous permet d'exporter vers un post-processeur CNC.
+      option_processor: Post-processeur
+      option_processor_help: |
+        Permet de choisir le post-processeur CNC utilisé pour l'exportation.
       option_file_format: Format
       option_file_format_help: |
         Permet de choisir le format de fichier à exporter.

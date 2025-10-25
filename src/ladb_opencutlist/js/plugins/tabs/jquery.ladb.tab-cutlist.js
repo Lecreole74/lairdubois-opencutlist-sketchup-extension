@@ -60,6 +60,7 @@
         this.$itemLabelsAllParts = $('#ladb_item_labels_all_parts', this.$header);
         this.$itemExport2dAllParts = $('#ladb_item_export_2d_all_parts', this.$header);
         this.$itemExport3dAllParts = $('#ladb_item_export_3d_all_parts', this.$header);
+        this.$itemExportProcessAllParts = $('#ladb_item_export_process_all_parts', this.$header);
         this.$itemShowAllGroups = $('#ladb_item_show_all_groups', this.$header);
         this.$itemNumbersSave = $('#ladb_item_numbers_save', this.$header);
         this.$itemNumbersReset = $('#ladb_item_numbers_reset', this.$header);
@@ -183,6 +184,7 @@
                 that.$itemLabelsAllParts.parents('li').toggleClass('disabled', groups.length === 0);
                 that.$itemExport2dAllParts.parents('li').toggleClass('disabled', groups.length === 0);
                 that.$itemExport3dAllParts.parents('li').toggleClass('disabled', groups.length === 0);
+                that.$itemExportProcessAllParts.parents('li').toggleClass('disabled', groups.length === 0);
                 that.$itemShowAllGroups.parents('li').toggleClass('disabled', groups.length === 0);
                 that.$itemNumbersSave.parents('li').toggleClass('disabled', groups.length === 0);
                 that.$itemNumbersReset.parents('li').toggleClass('disabled', groups.length === 0);
@@ -2198,7 +2200,103 @@
 
     }
 
-    // Write /////
+    // Write Process /////
+    LadbTabCutlist.prototype.writeProcessAllParts = function () {
+        const that = this;
+        let partIdsWithContext = this.grabVisiblePartIdsWithContext(null, REAL_MATERIALS_FILTER);
+        let partIds = partIdsWithContext.partIds;
+        let context = partIdsWithContext.context;
+        let partCount = 0;
+        let partInstanceCount = 0;
+        for (let i = 0 ; i < partIds.length; i++) {
+            const groupAndPart = this.findGroupAndPartById(partIds[i]);
+            if (groupAndPart) {
+                if (groupAndPart.part.children) {
+                    partCount += groupAndPart.part.children.length;
+                } else {
+                    partCount += 1;
+                }
+                partInstanceCount += groupAndPart.part.count;
+            }
+        }
+        if (partCount === 0) {
+            this.dialog.alert(i18next.t('tab.cutlist.write.title'), i18next.t('tab.cutlist.write.error.no_part'));
+            return;
+        }
+        const section = context && context.targetGroup ? context.targetGroup.id : null;
+        // Retrieve writeProcess options
+        rubyCallCommand('core_get_model_preset', { dictionary: 'cutlist_write_Process_options', section: section }, function (response) {
+            const writeProcessOptions = response.preset;
+            const $modal = that.appendModalInside('ladb_cutlist_modal_write_process', 'tabs/cutlist/_modal-write-process.twig', {
+                group: context ? context.targetGroup : null,
+                isGroupSelection: context ? context.isGroupSelection : false,
+                isPartSelection: context ? context.isPartSelection : false,
+            });
+            // Fetch UI elements
+            const $widgetPreset = $('.ladb-widget-preset', $modal);
+            const $selectProcessor = $('#ladb_select_processor', $modal);
+            const $selectUnit = $('#ladb_select_unit', $modal);
+            const $btnExport = $('#ladb_btn_export', $modal);
+
+            rubyCallCommand('cutlist_get_processors', {}, function (response) {   
+                $selectProcessor.empty();
+                $.each(response.processors, function(index, option) {
+                    $selectProcessor.append($('<option>', {
+                        value: option.name,
+                        text: option.name,
+                        extension: option.extension,
+                        "data-content": option.name
+                    }))   
+                });
+                
+                const fnFetchOptions = function (options) {
+                    options.processor = $selectProcessor.val();
+                    options.unit = that.toInt($selectUnit.val());
+                };
+
+                const fnFillInputs = function (options) {
+                    $selectProcessor.selectpicker('val', options.processor);
+                    $selectUnit.selectpicker('val', options.unit);
+                    fnUpdateButtonLabel();
+                };
+
+                const fnUpdateButtonLabel = function () {
+                    $('#ladb_btn_export_file_format', $btnExport).html($selectProcessor.children(':selected').attr('extension') + ' <small>( ' + partCount + ' ' + i18next.t('default.file', { count: partCount }).toLowerCase() + ' )</small>');
+                }
+
+                $widgetPreset.ladbWidgetPreset({
+                    dialog: that.dialog,
+                    dictionary: 'cutlist_write_Process_options',
+                    fnFetchOptions: fnFetchOptions,
+                    fnFillInputs: fnFillInputs
+                });
+
+                fnFillInputs(writeProcessOptions);
+                // Bind buttons
+                $btnExport.on('click', function () {
+                    // Fetch options
+                    fnFetchOptions(writeProcessOptions);
+                    // Store options
+                    rubyCallCommand('core_set_model_preset', { dictionary: 'cutlist_write_Process_options', values: writeProcessOptions, section: section });
+                    // Hide modal
+                    $modal.modal('hide');
+                });
+
+                $selectProcessor
+                    .selectpicker(SELECT_PICKER_OPTIONS)
+                    .on('changed.bs.select', function () {
+                        fnUpdateButtonLabel();
+                    })
+                // Show modal
+                $modal.modal('show');
+
+                // Setup popovers
+                that.dialog.setupPopovers();
+            });    
+        });
+    
+    };
+    
 
     LadbTabCutlist.prototype.writeAllParts = function (is2d) {
         let partIdsWithContext = this.grabVisiblePartIdsWithContext(null, REAL_MATERIALS_FILTER);
@@ -6585,6 +6683,12 @@
         this.$itemExport3dAllParts.on('click', function () {
             if (!$(this).parents('li').hasClass('disabled')) {
                 that.writeAllParts(false);
+            }
+            this.blur();
+        });
+        this.$itemExportProcessAllParts.on('click', function () {
+            if (!$(this).parents('li').hasClass('disabled')) {
+                that.writeProcessAllParts();
             }
             this.blur();
         });
