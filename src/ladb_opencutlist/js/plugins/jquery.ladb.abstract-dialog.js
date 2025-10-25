@@ -402,7 +402,7 @@ LadbAbstractDialog.prototype.notifySuccess = function (text, buttons) {
 
 LadbAbstractDialog.prototype.showContextMenu = function (clientX, clientY, items, removedCallback) {
     const that = this;
-
+console.log('showContextMenu', clientX, clientY, items);
     let $window = $(window);
     let $body = $('body');
     let $contextMenu = $('<div class="context-menu" />');

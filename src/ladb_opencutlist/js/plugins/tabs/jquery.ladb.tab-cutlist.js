@@ -798,6 +798,18 @@
                                     }
                                 }
                             });
+                            items.push({ separator: true });
+                            items.push({
+                                icon: 'process',
+                                text: i18next.t('default.export') + ' / ' + i18next.t('tab.cutlist.menu.write_process') + '...',
+                                callback: function () {
+                                    if (isMultiple) {
+                                        // that.writeGroupParts(groupAndPart.group.id, true);
+                                    } else {
+                                        // that.writePart(partId, true);
+                                    }
+                                }
+                            });
                             that.dialog.showContextMenu(e.clientX, e.clientY, items, function () {
                                 editedPartRow = null;
                                 fnMouseLeave.call(row);
@@ -2333,8 +2345,8 @@
     };
 
     LadbTabCutlist.prototype.writeParts = function (partIds, context, is2d) {
+        console.log('writeParts',"partIds:", partIds, " context:", context, "is2d:",is2d);
         const that = this;
-
         let partCount = 0;
         let partInstanceCount = 0;
         for (let i = 0 ; i < partIds.length; i++) {

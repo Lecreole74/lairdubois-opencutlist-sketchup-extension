@@ -407,11 +407,13 @@ tab:
       labels_parts: Imprimer les étiquettes
       write_2d: Projection 2D
       write_3d: Géométrie 3D
+      write_process: Processeur CNC
       write_2d_parts: Exporter la projection 2D des pièces
       write_3d_parts: Exporter la géométrie 3D des pièces
       write_process_parts: Exporter vers un processeur CNC
       group_write_2d_parts: Exporter la projection 2D des pièces du groupe
       group_write_3d_parts: Exporter la géométrie 3D des pièces du groupe
+      group_write_process_parts: Exporter vers un processeur CNC les pièces du groupe
       group_layout_parts: Imprimer le dessin d'ensemble des pièces du groupe
       group_numbers_save: Mémoriser les numéros de pièces du groupe
       group_numbers_reset: Réinitialiser les numéros de pièces du groupe
