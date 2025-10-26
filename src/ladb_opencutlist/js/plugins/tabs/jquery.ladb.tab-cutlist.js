@@ -2255,9 +2255,6 @@
     // Write Process /////
     LadbTabCutlist.prototype.processParts = function (partIds, context) {
         const that = this;
-        // let partIdsWithContext = this.grabVisiblePartIdsWithContext(null, REAL_MATERIALS_FILTER);
-        // let partIds = partIdsWithContext.partIds;
-        // let context = partIdsWithContext.context;
         let partCount = 0;
         let partInstanceCount = 0;
         for (let i = 0 ; i < partIds.length; i++) {
