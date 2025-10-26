@@ -624,5 +624,4 @@ i, span.ladb-opencutlist-icon:before {
   align-items: center;
   gap: 6px; /* espace entre l'icône et le texte */
   text-decoration: none; /* optionnel */
-  color: inherit; /* pour hériter de la couleur du texte */
 }

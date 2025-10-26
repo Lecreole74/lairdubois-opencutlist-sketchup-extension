@@ -588,6 +588,12 @@
                     that.writeGroupParts(groupId, false);
                     $(this).blur();
                 });
+                $('a.ladb-item-export-process-group-parts', that.$page).on('click', function () {
+                    const $group = $(this).parents('.ladb-cutlist-group');
+                    const groupId = $group.data('group-id');
+                    that.processGroupParts(groupId);
+                    $(this).blur();
+                });
                 $('a.ladb-item-export-group-parts', that.$page).on('click', function () {
                     const $group = $(this).parents('.ladb-cutlist-group');
                     const groupId = $group.data('group-id');
@@ -804,9 +810,9 @@
                                 text: i18next.t('default.export') + ' / ' + i18next.t('tab.cutlist.menu.write_process') + '...',
                                 callback: function () {
                                     if (isMultiple) {
-                                        // that.writeGroupParts(groupAndPart.group.id, true);
+                                        that.processGroupParts(groupAndPart.group.id, true);
                                     } else {
-                                        // that.writePart(partId, true);
+                                        that.processPart(partId, true);
                                     }
                                 }
                             });
@@ -2212,12 +2218,46 @@
 
     }
 
-    // Write Process /////
-    LadbTabCutlist.prototype.writeProcessAllParts = function () {
-        const that = this;
+    LadbTabCutlist.prototype.processAllParts = function () {
         let partIdsWithContext = this.grabVisiblePartIdsWithContext(null, REAL_MATERIALS_FILTER);
-        let partIds = partIdsWithContext.partIds;
-        let context = partIdsWithContext.context;
+        this.processParts(partIdsWithContext.partIds, partIdsWithContext.context);
+    };
+
+    LadbTabCutlist.prototype.processGroupParts = function (groupId) {
+        let partIdsWithContext = this.grabVisiblePartIdsWithContext(groupId, REAL_MATERIALS_FILTER);
+        this.processParts(partIdsWithContext.partIds, partIdsWithContext.context);
+    };
+
+    LadbTabCutlist.prototype.processPart = function (partId) {
+        const groupAndPart = this.findGroupAndPartById(partId);
+        if (groupAndPart) {
+
+            const group = groupAndPart.group;
+            const part = groupAndPart.part;
+
+            const isFolder = part.children && part.children.length > 0;
+            const isSelected = this.selectionGroupId === group.id && this.selectionPartIds.includes(partId) && this.selectionPartIds.length > 1;
+
+            let partIds;
+            if (isFolder) {
+                partIds = [ partId ];
+            } else if (isSelected) {
+                partIds = this.selectionPartIds;
+            } else {
+                partIds = [ partId ];
+            }
+
+            this.processParts(partIds, null);
+
+        }
+    };
+
+    // Write Process /////
+    LadbTabCutlist.prototype.processParts = function (partIds, context) {
+        const that = this;
+        // let partIdsWithContext = this.grabVisiblePartIdsWithContext(null, REAL_MATERIALS_FILTER);
+        // let partIds = partIdsWithContext.partIds;
+        // let context = partIdsWithContext.context;
         let partCount = 0;
         let partInstanceCount = 0;
         for (let i = 0 ; i < partIds.length; i++) {
@@ -2345,7 +2385,6 @@
     };
 
     LadbTabCutlist.prototype.writeParts = function (partIds, context, is2d) {
-        console.log('writeParts',"partIds:", partIds, " context:", context, "is2d:",is2d);
         const that = this;
         let partCount = 0;
         let partInstanceCount = 0;
@@ -4338,6 +4377,7 @@
             const $btnHighlight = $('#ladb_cutlist_part_highlight', $modal);
             const $btnLayout = $('#ladb_cutlist_part_layout', $modal);
             const $btnExportToFile = $('a.ladb-cutlist-write-parts', $modal);
+            const $btnProcessPart = $('a.ladb-cutlist-process-parts', $modal);
             const $btnUpdate = $('#ladb_cutlist_part_update', $modal);
 
             let thumbnailLoaded = false;
@@ -4795,6 +4835,10 @@
                 this.blur();
                 that.writePart(part.id, $(this).data('is-2d'));
             });
+            $btnProcessPart.on('click', function () {
+                this.blur();
+                that.processPart(part.id);
+            });
             $btnUpdate.on('click', function () {
 
                 for (let i = 0; i < editedParts.length; i++) {
@@ -4949,6 +4993,7 @@
             // Change event
             $('input, select', $modal).on('change', function () {
                 $btnExportToFile.prop('disabled', true);
+                $btnProcessPart.prop('disabled', true);
             });
 
         } else {
@@ -6700,7 +6745,7 @@
         });
         this.$itemExportProcessAllParts.on('click', function () {
             if (!$(this).parents('li').hasClass('disabled')) {
-                that.writeProcessAllParts();
+                that.processAllParts();
             }
             this.blur();
         });
