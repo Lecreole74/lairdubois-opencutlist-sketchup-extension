@@ -2327,6 +2327,25 @@
                     fnFetchOptions(writeProcessOptions);
                     // Store options
                     rubyCallCommand('core_set_model_preset', { dictionary: 'cutlist_write_Process_options', values: writeProcessOptions, section: section });
+                    
+                    rubyCallCommand('cutlist_process_parts', $.extend({
+                        part_ids: partIds,
+                    }, writeProcessOptions), function (response) {
+
+                        if (response.errors) {
+                            that.dialog.notifyErrors(response.errors);
+                        }
+                        if (response.export_path) {
+                            that.dialog.notifySuccess(i18next.t('core.success.exported_to', {path: response.export_path}), [
+                                Noty.button(i18next.t('default.open'), 'btn btn-default', function () {
+                                    rubyCallCommand('core_open_external_file', {
+                                        path: response.export_path
+                                    });
+                                })
+                            ]);
+                        }
+                    });
+
                     // Hide modal
                     $modal.modal('hide');
                 });

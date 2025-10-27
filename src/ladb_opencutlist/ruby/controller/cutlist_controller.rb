@@ -76,6 +76,10 @@ module Ladb::OpenCutList
         write_parts_command(settings)
       end
 
+      PLUGIN.register_command("cutlist_process_parts") do |settings|
+        process_parts_command(settings)
+      end
+
       PLUGIN.register_command("cutlist_get_processors") do |settings|
         get_processors(settings)
       end
@@ -286,6 +290,16 @@ module Ladb::OpenCutList
 
       # Setup worker
       worker = CutlistWritePartsWorker.new(@cutlist, **settings)
+
+      # Run !
+      worker.run
+    end
+
+    def process_parts_command(settings)
+      require_relative '../worker/cutlist/cutlist_process_parts_worker'
+
+      # Setup worker
+      worker = CutlistProcessPartsWorker.new(@cutlist, **settings)
 
       # Run !
       worker.run
