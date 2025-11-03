@@ -450,10 +450,15 @@ module Ladb::OpenCutList
       files = Dir.entries(processors_directory).select { |f| !File.directory?(f) }
       files.each do |file|
         relative_path = File.absolute_path(file, processors_directory)
+        if Ladb::OpenCutList.const_defined?(:CutlistProcessPartWorker)
+          Ladb::OpenCutList.send(:remove_const, :CutlistProcessPartWorker)
+        end
         load relative_path
-        processor_name = File.basename(file, File.extname(file))
-        module_name = "#{processor_name.capitalize}Processor"
-        infos_processor = Object.const_get(module_name)._get_infos()
+        worker_class = Ladb::OpenCutList::CutlistProcessPartWorker
+        infos_processor = { :name => worker_class::PROCESSOR_NAME,
+                            :version => worker_class::PROCESSOR_VERSION,
+                            :extension => ".#{worker_class::PROCESSOR_EXTENSION}",
+                            :path => relative_path }
         processors.push(infos_processor)
       end
       return {:processors => processors}

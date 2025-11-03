@@ -11,13 +11,14 @@ module Ladb::OpenCutList
     include PartDrawingHelper
 
     def initialize(cutlist,
+      path: ,
       part_ids: ,
       processor: ,
       unit: Length::Millimeter
     )
 
       @cutlist = cutlist
-
+      @path = path
       @part_ids = part_ids
       @processor = processor
       @unit = unit
@@ -41,21 +42,33 @@ module Ladb::OpenCutList
       if dir
 
         folder_names = []
+        processors_directory = File.join(PLUGIN_DIR, 'posts')
+        if Ladb::OpenCutList.const_defined?(:CutlistProcessPartWorker)
+          Ladb::OpenCutList.send(:remove_const, :CutlistProcessPartWorker)
+        end
+        load @path
+
         parts.each do |part|
-
-          # Ignore virtual parts
           next if part.virtual
-
           group = part.group
           folder_name = group.material_display_name
           folder_name = PLUGIN.get_i18n_string('tab.cutlist.material_undefined') if folder_name.nil? || folder_name.empty?
           folder_name += " - #{group.std_dimension}" unless group.std_dimension.empty?
           folder_name = _sanitize_filename(folder_name)
           folder_path = File.join(dir, folder_name)
-
-          
-
-          file_name = "#{part.number} - #{_sanitize_filename(part.name)}"
+          json_obj = {}
+          json_obj['id'] = part.id
+          json_obj['filename'] = "#{part.number} - #{_sanitize_filename(part.name)}"
+          json_obj['folder_path'] = folder_path
+          json_obj['number'] = part.number
+          json_obj['name'] = part.name
+          json_obj['material_name'] = group.material_display_name
+          json_obj['material_std_dimension'] = group.std_dimension
+          json_obj['faces'] = {}
+          json_obj['flipped'] = part.flipped
+          json_obj['description'] = part.description
+          json_obj['count'] = part.count
+          json_obj['tags'] = part.tags.dup
 
           begin
 
@@ -72,12 +85,23 @@ module Ladb::OpenCutList
             end
 
             count = 0
+            # PART_DRAWING_TYPE_NONE = 0
+            # PART_DRAWING_TYPE_2D_TOP = 1
+            # PART_DRAWING_TYPE_2D_BOTTOM = 2
+            # PART_DRAWING_TYPE_2D_LEFT = 3
+            # PART_DRAWING_TYPE_2D_RIGHT = 4
+            # PART_DRAWING_TYPE_2D_FRONT = 5
+            # PART_DRAWING_TYPE_2D_BACK = 6
+            # PART_DRAWING_TYPE_3D = 7
+            # 
+            faces_type = ["PART_DRAWING_TYPE_NONE","PART_DRAWING_TYPE_2D_TOP" ,"PART_DRAWING_TYPE_2D_BOTTOM","PART_DRAWING_TYPE_2D_LEFT","PART_DRAWING_TYPE_2D_RIGHT", "PART_DRAWING_TYPE_2D_FRONT","PART_DRAWING_TYPE_2D_BACK","PART_DRAWING_TYPE_3D"]
             6.times do |i|
               count += 1
-              puts "Processing part #{part.number} - #{part.name} (view #{i})..."
+              json_obj['faces']["#{faces_type[count]}"] = {}
+              current_face_obj = json_obj['faces']["#{faces_type[count]}"]
               drawing_def = _compute_part_drawing_def(count, part,
                                                       ignore_edges: false,
-                                                      origin_position: CommonDrawingDecompositionWorker::ORIGIN_POSITION_DEFAULT
+                                                      origin_position: CommonDrawingDecompositionWorker::ORIGIN_POSITION_BOUNDS_MIN
               )
 
               return { :errors => [ 'tab.cutlist.error.unknow_part' ] } unless drawing_def.is_a?(DrawingDef)
@@ -105,24 +129,42 @@ module Ladb::OpenCutList
                 y = _get_value(origin.y)
                 width = _get_value(size.x)
                 height = _get_value(size.y)
-                puts "size=(#{width}#{unit_sign} x #{height}#{unit_sign})"
+               current_face_obj['origin'] = {
+                  'x' => x,   
+                  'y' => y
+                }
+              current_face_obj['unit_sign'] = unit_sign
+               current_face_obj['size'] = {
+                  'width' => width,   
+                  'height' => height,
+                  'thickness' => 0
+                }
+
                 unless projection_def.layer_defs.empty?
 
-                  _write_projection_def( projection_def,
+                  _write_projection_def(current_face_obj, projection_def,
                                             transformation: unit_transformation,
                                             unit_transformation: unit_transformation,
                                             unit_sign: unit_sign)
                 end
+                if(faces_type[count] == "PART_DRAWING_TYPE_2D_TOP")
+                    json_obj['size'] = current_face_obj['size']
+                    json_obj['origin'] = current_face_obj['origin']
+                    json_obj['unit_sign'] = current_face_obj['unit_sign']
+                    json_obj['size']['thickness'] = current_face_obj['size']['thickness']
+                end
               end
-              puts "************************************************"
             end
+            json_str = JSON.pretty_generate(json_obj)
+            worker_module = CutlistProcessPartWorker.new(part: json_obj)
+            worker_module.run
+
           rescue => e
             puts e.inspect
             puts e.backtrace
             return { :errors => [ [ 'core.error.failed_export_to', { :path => folder_path, :error => e.message } ] ] }
           end
         end
-
         { :export_path => dir }
       end
     end
@@ -150,7 +192,7 @@ module Ladb::OpenCutList
       value.to_f.round(3)
     end
 
-    def _write_projection_def( projection_def,
+    def _write_projection_def( face_obj, projection_def,
                                   transformation: IDENTITY,
                                   unit_transformation: IDENTITY,
                                   unit_sign: '')
@@ -163,59 +205,15 @@ module Ladb::OpenCutList
 
       flipped = TransformationUtils.flipped?(transformation)
       rot_x, rot_y, rot_z = TransformationUtils.euler_angles(transformation)
-
+      face_obj['works'] = []
       projection_def.layer_defs.sort_by { |v| [ v.type_outer? ? 0 : v.depth, v.type_paths? ? 1 : 0 ] }.each do |layer_def|   # Outer always on back and Path's layers on top of same depth layers
-
+        if layer_def.type_outer? || layer_def.depth == 0
+                    
+        end
         # id = _svg_get_projection_layer_def_identifier(layer_def, unit_transformation, prefix)
-
-        if layer_def.type_paths?
-          puts "type = paths: #{_get_value(Geom::Point3d.new(layer_def.depth, 0).transform(unit_transformation).x)}#{unit_sign}"
-          # attributes = {
-          #   stroke: _svg_stroke_color_hex(layer_def.has_color? ? layer_def.color : paths_stroke_color),
-          #   fill: layer_def.type_closed_paths? ? _svg_fill_color_hex(paths_fill_color) : 'none',
-          #   id: id,
-          #   'serif:id': id,
-          #   'inkscape:label': id
-          # }
-          # attributes.merge!({ 'shaper:cutDepth': "#{_svg_value(Geom::Point3d.new(layer_def.depth, 0).transform(unit_transformation).x)}#{unit_sign}" }) if layer_def.depth != 0
-        elsif layer_def.type_holes? # Keep it before checking outer type
-          puts "type = holes: #{_get_value(Geom::Point3d.new(layer_def.depth, 0).transform(unit_transformation).x)}#{unit_sign}"
-          # attributes = {
-          #   stroke: _svg_stroke_color_hex(holes_stroke_color, holes_fill_color),
-          #   fill: _svg_fill_color_hex(holes_fill_color),
-          #   id: id,
-          #   'serif:id': id,
-          #   'inkscape:label': id
-          # }
-          # attributes.merge!({ 'shaper:cutDepth': "#{_svg_value(Geom::Point3d.new(layer_def.depth, 0).transform(unit_transformation).x)}#{unit_sign}" }) if layer_def.depth > 0
-        elsif layer_def.type_outer? || layer_def.depth == 0
-          puts "type = outer or depth=0: #{_get_value(Geom::Point3d.new(layer_def.depth, 0).transform(unit_transformation).x)}#{unit_sign}"
-          # attributes = {
-          #   stroke: _svg_stroke_color_hex(stroke_color, fill_color),
-          #   fill: _svg_fill_color_hex(fill_color),
-          #   id: id,
-          #   'serif:id': id,
-          #   'inkscape:label': id
-          # }
-          # attributes.merge!({ 'shaper:cutDepth': "#{_svg_value(Geom::Point3d.new(layer_def.depth, 0).transform(unit_transformation).x)}#{unit_sign}" }) if layer_def.depth > 0
-        else
-          puts "type = depths: #{_get_value(Geom::Point3d.new(layer_def.depth, 0).transform(unit_transformation).x)}#{unit_sign}"
-          # attributes = {
-          #   stroke: if depths_stroke_color
-          #             ColorUtils.color_to_hex(depths_stroke_color)
-          #           else
-          #               _svg_stroke_color_hex(stroke_color, fill_color)
-          #           end,
-          #   fill: if depths_fill_color
-          #           ColorUtils.color_to_hex(depths_fill_color)
-          #         else
-          #           fill_color ? ColorUtils.color_to_hex(ColorUtils.color_lighten(fill_color, projection_def.max_depth > 0 ? (layer_def.depth / projection_def.max_depth) * 0.6 + 0.2 : 0.3)) : 'none'
-          #         end,
-          #   id: id,
-          #   'serif:id': id,
-          #   'inkscape:label': id,
-          #   'shaper:cutDepth': "#{_svg_value(Geom::Point3d.new(layer_def.depth, 0).transform(unit_transformation).x)}#{unit_sign}"
-          # }
+        p = _get_value(Geom::Point3d.new(layer_def.depth, 0).transform(unit_transformation).x)
+        if layer_def.type_outer? || layer_def.depth == 0
+          face_obj['size']['thickness'] = p
         end
 
         data = []
@@ -241,14 +239,17 @@ module Ladb::OpenCutList
               ).transform(transformation)
               radius = Geom::Point3d.new(radius, 0).transform(unit_transformation)
               x1 = _get_value(position1.x)
-              y1 = _get_value(-position1.y)
+              y1 = _get_value(position1.y)
               x2 = _get_value(position2.x)
               y2 = _get_value(-position2.y)
               r = _get_value(radius.x)
-              puts "x = #{x1+r}"
-              puts "y = #{y1}"
-              puts "r = #{r}"
-
+              face_obj['works'] << {
+                'type' => 'wole', 
+                'x' => x1+r,
+                'y' => y1,
+                'd' => r*2,
+                'p' => p
+              }
               sflag = portion.ccw? ? 0 : 1
 
               data << "M #{x1},#{y1} A #{r},#{r} 0 0,#{sflag} #{x2},#{y2} A #{r},#{r} 0 0,#{sflag} #{x1},#{y1} Z"

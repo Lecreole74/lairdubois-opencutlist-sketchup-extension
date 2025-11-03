@@ -2292,12 +2292,12 @@
                 $.each(response.processors, function(index, option) {
                     $selectProcessor.append($('<option>', {
                         value: option.name,
-                        text: option.name,
                         extension: option.extension,
-                        "data-content": option.name
-                    }))   
+                        path: option.path,
+                        "data-content": option.name + " v" + option.version
+                    }))
                 });
-                
+
                 const fnFetchOptions = function (options) {
                     options.processor = $selectProcessor.val();
                     options.unit = that.toInt($selectUnit.val());
@@ -2330,6 +2330,7 @@
                     
                     rubyCallCommand('cutlist_process_parts', $.extend({
                         part_ids: partIds,
+                        path: $selectProcessor.children(':selected').attr('path'),
                     }, writeProcessOptions), function (response) {
 
                         if (response.errors) {
