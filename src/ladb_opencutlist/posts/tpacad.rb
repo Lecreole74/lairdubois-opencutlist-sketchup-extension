@@ -117,24 +117,24 @@ module Ladb::OpenCutList
           work["datas"].each_with_index do |point, i|
             next_point = work["datas"][i + 1]
             break unless next_point # stop avant la fin
-            xi = (i==0) ? point["x"] : ""
-            yi = (i==0) ? point["y"] : ""
+            xi = (i==0) ? _inv_x(point["x"]) : ""
+            yi = (i==0) ? _inv_y(point["y"]) : ""
             zi = (i==0) ? point["z"] : ""
-            x = (i==0) ? next_point["x"] : next_point["x"]
-            y = (i==0) ? next_point["y"] : next_point["y"]
-            z = (i==0) ?  next_point["z"] : next_point["z"]
+            x = _inv_x(next_point["x"])
+            y = _inv_y(next_point["y"])
+            z = next_point["z"]
             case next_point["type"]
             when "L01"
               str = getTpaL01(0, _trunc(xi), _trunc(yi), _trunc(zi), _trunc(x), _trunc(y), _trunc(z))
-              file.puts(str)
-            when "A01"
+              cleaned = str.gsub(/#\d+=\s*(?=(#|\}|$))/, "")
+              file.puts(cleaned)
+            when "A11"
               puts point
               ew = (next_point["sflag"]==0) ? 1 : 0
-              i = (next_point["x"]-point["x"])/2
-              j = (next_point["y"]-point["y"])/2
-              puts "ew:#{ew} i:#{i} j:#{j}"
-              str = getTpaA01(0, _trunc(xi), _trunc(yi), _trunc(zi), _trunc(x), _trunc(y), _trunc(z), ew, i, j)
-              file.puts(str)
+              u = next_point["rx"]
+              str = getTpaA11(0, _trunc(xi), _trunc(yi), _trunc(zi), _trunc(x), _trunc(y), _trunc(z), ew, u)
+              cleaned = str.gsub(/#\d+=\s*(?=(#|\}|$))/, "")
+              file.puts(cleaned)
             end
           end
         end
@@ -165,7 +165,7 @@ module Ladb::OpenCutList
       return "W#2201{ ::WTl  #8015=#{eg} #8121=#{xi} #8122=#{yi} #8123=#{zi} #1=#{x} #2=#{y} #3=#{z} #42=0 #49=0 }W"
     end
 
-    def getTpaA01(eg, xi, yi, zi, x, y, z, ew, i, j)
+    def getTpaA11(eg, xi, yi, zi, x, y, z, ew, u)
       # A01
       # #8015 [EG] // 0:Absolute 1:Relatif
       # #8121 [XI] // x départ
@@ -177,7 +177,7 @@ module Ladb::OpenCutList
       # #34 [EW] // 0:sens aiguille 1:sens inverse
       # #31 [I] // centre x
       # #32 [J] // centre y
-      return "W#2101{ ::WTa  #8015=#{eg} #8121=#{xi} #8122=#{yi} #8123=#{zi} #1=#{x} #2=#{y} #3=#{z} #34=#{ew} #31=#{i} #32=#{j} #42=0 #49=0 }W"
+      return "W#2111{ ::WTa  #8015=0 #8121=#{xi} #8122=#{yi} #8123=#{zi} #1=#{x} #2=#{y} #3=#{z} #34=#{ew} #8017=#{u} #8050=0 #42=0 #49=0 }W"
     end
 
     #Utilitaires
@@ -199,6 +199,18 @@ module Ladb::OpenCutList
         work["y"] = new_y
       end
       return side
+    end
+
+    def _inv_x(value)
+      x = value.to_f
+      new_x = @width - x
+      return new_x
+    end
+
+    def _inv_y(value)
+      y = value.to_f
+      new_y = @height - y
+      return new_y
     end
 
     def _find_diameter(value, tolerance = 0.2)

@@ -190,11 +190,7 @@ module Ladb::OpenCutList
       flipped = TransformationUtils.flipped?(transformation)
       rot_x, rot_y, rot_z = TransformationUtils.euler_angles(transformation)
       face_obj['works'] = []
-      projection_def.layer_defs.sort_by { |v| [ v.type_outer? ? 0 : v.depth, v.type_paths? ? 1 : 0 ] }.each do |layer_def|   # Outer always on back and Path's layers on top of same depth layers
-        # if layer_def.type_outer? || layer_def.depth == 0
-                    
-        # end
-        # id = _svg_get_projection_layer_def_identifier(layer_def, unit_transformation, prefix)
+      projection_def.layer_defs.sort_by { |v| [ v.type_outer? ? 0 : v.depth, v.type_paths? ? 1 : 0 ] }.each do |layer_def| 
         z = _get_value(Geom::Point3d.new(layer_def.depth, 0).transform(unit_transformation).x)
         if layer_def.type_outer? || layer_def.depth == 0
           face_obj['size']['thickness'] = z
@@ -231,24 +227,22 @@ module Ladb::OpenCutList
                 'z' => -z,
                 'd' => r*2
               }
-              # sflag = portion.ccw? ? 0 : 1
 
-              # data << "M #{x1},#{y1} A #{r},#{r} 0 0,#{sflag} #{x2},#{y2} A #{r},#{r} 0 0,#{sflag} #{x1},#{y1} Z"
             else
 
               # Extract loop points from ordered edges and arc curves
               portion_setup = []
 
               depth = Geom::Point3d.new(layer_def.depth, 0).transform(unit_transformation)
-              # puts "-----def:#{_processor_value(depth.x)}"
+
               poly_def.curve_def.portions.map.with_index { |portion, index|
                 start_point = portion.start_point.transform(transformation)
                 end_point = portion.end_point.transform(transformation)
                 x = _get_value(start_point.x)
                 y = _get_value(start_point.y)
-                # z = _get_value(depth.x)
+
                 if(index == 0)
-                  # puts "START > x: #{x}, y: #{y}, z: #{z}"
+
                   portion_setup << {
                     "type" => "L01",
                     "x" => x, 
@@ -275,9 +269,9 @@ module Ladb::OpenCutList
                   y1 = _get_value(-middle.y)
                   x2 = _get_value(end_point.x)
                   y2 = _get_value(-end_point.y)
-                  # puts "A01 > x2: #{x2}, y2: #{-y2} rx:#{rx} sflag: #{sflag} lflag: #{lflag} x1: #{x1} y1:#{y1} xrot: #{xrot}, depth: #{_processor_value(depth.x)}"
+
                   portion_setup << {
-                    "type" => "A01", 
+                    "type" => "A11", 
                     "rx" => rx,
                     "ry" => ry,
                     "z" => -z, 
@@ -303,53 +297,13 @@ module Ladb::OpenCutList
               }
               face_obj['works'] << { "type" => "setup", "datas" => portion_setup }
             end
-            # else
-
-            #   # Extract loop points from ordered edges and arc curves
-            #   data << "#{poly_def.curve_def.portions.map.with_index { |portion, index|
-
-            #     portion_data = []
-            #     start_point = portion.start_point.transform(transformation)
-            #     end_point = portion.end_point.transform(transformation)
-            #     portion_data << "M #{_get_value(start_point.x)},#{_get_value(-start_point.y)}" if index == 0
-
-            #     if portion.is_a?(Geometrix::ArcCurvePortionDef)
-
-            #       radius = Geom::Point3d.new(
-            #         portion.ellipse_def.xradius,
-            #         portion.ellipse_def.yradius
-            #       ).transform(unit_transformation)
-            #       middle = portion.mid_point.transform(transformation)
-
-            #       rx = _get_value(radius.x)
-            #       ry = _get_value(radius.y)
-            #       xrot = -portion.ellipse_def.angle.radians.round(3) + rot_z.radians.round(3)
-            #       lflag = 0
-            #       sflag = if flipped ? !portion.ccw? : portion.ccw?
-            #                 0
-            #               else
-            #                 1
-            #               end
-            #       x1 = _get_value(middle.x)
-            #       y1 = _get_value(-middle.y)
-            #       x2 = _get_value(end_point.x)
-            #       y2 = _get_value(-end_point.y)
-            #       portion_data << "A #{rx},#{ry} #{xrot} #{lflag},#{sflag} #{x1},#{y1}"
-            #       portion_data << "A #{rx},#{ry} #{xrot} #{lflag},#{sflag} #{x2},#{y2}"
-            #     else
-            #       portion_data << "L #{_get_value(end_point.x)},#{_get_value(-end_point.y)}"
-
-            #     end
-            #     portion_data
-            #   }.join(' ')} #{poly_def.curve_def.closed? ? 'Z' : ''}"
-            # end
-          else
+          # else
             # Extract loop points from vertices (quicker)
-            data << "M #{poly_def.points.map { |point|
-              point = point.transform(transformation)
-              point.y *= -1
-              "#{_get_value(point.x)},#{_get_value(point.y)}"
-            }.join(' L ')}#{poly_def.curve_def.closed? ? 'Z' : ''}"
+            # data << "M #{poly_def.points.map { |point|
+            #   point = point.transform(transformation)
+            #   point.y *= -1
+            #   "#{_get_value(point.x)},#{_get_value(point.y)}"
+            # }.join(' L ')}#{poly_def.curve_def.closed? ? 'Z' : ''}"
           end
         end
       end
