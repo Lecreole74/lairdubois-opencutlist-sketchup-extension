@@ -47,19 +47,20 @@ module Ladb::OpenCutList
           folder_name += " - #{group.std_dimension}" unless group.std_dimension.empty?
           folder_name = _sanitize_filename(folder_name)
           folder_path = File.join(dir, folder_name)
-          json_obj = {}
-          json_obj['id'] = part.id
-          json_obj['filename'] = "#{part.number} - #{_sanitize_filename(part.name)}"
-          json_obj['folder_path'] = folder_path
-          json_obj['number'] = part.number
-          json_obj['name'] = part.name
-          json_obj['material_name'] = group.material_display_name
-          json_obj['material_std_dimension'] = group.std_dimension
-          json_obj['faces'] = {}
-          json_obj['flipped'] = part.flipped
-          json_obj['description'] = part.description
-          json_obj['count'] = part.count
-          json_obj['tags'] = part.tags.dup
+          json_obj = {
+            'id' => part.id,
+            'name' => _sanitize_filename(part.name),
+            'number' => part.number,
+            'folder_path' => folder_path,
+            'material_name' => group.material_display_name,
+            'material_std_dimension' => group.std_dimension,
+            'faces' => {},
+            'flipped' => part.flipped,
+            'description' => part.description,
+            'count' => part.count,
+            'tags' => part.tags.dup,
+            'content_layers' => part.content_layers.dup
+          }
           begin
             unless folder_names.include?(folder_name)
               if File.exist?(folder_path)
@@ -73,21 +74,15 @@ module Ladb::OpenCutList
               folder_names << folder_name
             end
             count = 0
-            # PART_DRAWING_TYPE_NONE = 0
-            # PART_DRAWING_TYPE_2D_TOP = 1
-            # PART_DRAWING_TYPE_2D_BOTTOM = 2
-            # PART_DRAWING_TYPE_2D_LEFT = 3
-            # PART_DRAWING_TYPE_2D_RIGHT = 4
-            # PART_DRAWING_TYPE_2D_FRONT = 5
-            # PART_DRAWING_TYPE_2D_BACK = 6
-            # PART_DRAWING_TYPE_3D = 7
-            # 
-            faces_type = ["PART_DRAWING_TYPE_NONE","PART_DRAWING_TYPE_2D_TOP" ,"PART_DRAWING_TYPE_2D_BOTTOM","PART_DRAWING_TYPE_2D_LEFT","PART_DRAWING_TYPE_2D_RIGHT", "PART_DRAWING_TYPE_2D_FRONT","PART_DRAWING_TYPE_2D_BACK","PART_DRAWING_TYPE_3D"]
-            6.times do |i|
-              count += 1
-              json_obj['faces']["#{faces_type[count]}"] = {}
-              current_face_obj = json_obj['faces']["#{faces_type[count]}"]
-              drawing_def = _compute_part_drawing_def(count, part,
+
+            faces_type = ["PART_DRAWING_TYPE_2D_TOP" ,"PART_DRAWING_TYPE_2D_BOTTOM","PART_DRAWING_TYPE_2D_LEFT","PART_DRAWING_TYPE_2D_RIGHT", "PART_DRAWING_TYPE_2D_FRONT","PART_DRAWING_TYPE_2D_BACK"]
+
+            # 6.times do |i|
+            faces_type.each_with_index do |face_name, i|
+              face_number = i + 1
+              json_obj['faces'][face_name] = {}
+              current_face_obj = json_obj['faces'][face_name]
+              drawing_def = _compute_part_drawing_def(face_number, part,
                                                       ignore_edges: false,
                                                       origin_position: CommonDrawingDecompositionWorker::ORIGIN_POSITION_BOUNDS_MIN
               )
@@ -104,37 +99,29 @@ module Ladb::OpenCutList
                 bounds = projection_def.bounds
                 unit_sign, unit_factor = _get_unit_sign_and_factor(@unit)
                 unit_transformation = Geom::Transformation.scaling(unit_factor, unit_factor, 1.0)
-                origin = Geom::Point3d.new(
-                  bounds.min.x,
-                  -(bounds.height + bounds.min.y)
-                ).transform(unit_transformation)
-                size = Geom::Point3d.new(
-                  bounds.width,
-                  bounds.height
-                ).transform(unit_transformation)
-
+                origin = Geom::Point3d.new(bounds.min.x, -(bounds.height + bounds.min.y)).transform(unit_transformation)
+                size = Geom::Point3d.new(bounds.width, bounds.height).transform(unit_transformation)
                 x = _get_value(origin.x)
                 y = _get_value(origin.y)
                 width = _get_value(size.x)
                 height = _get_value(size.y)
-               current_face_obj['origin'] = {
+                current_face_obj['origin'] = {
                   'x' => x,   
                   'y' => y
                 }
-              current_face_obj['unit_sign'] = unit_sign
-               current_face_obj['size'] = {
+                current_face_obj['unit_sign'] = unit_sign
+                current_face_obj['size'] = {
                   'width' => width,   
                   'height' => height,
                   'thickness' => 0
                 }
                 unless projection_def.layer_defs.empty?
-
                   _write_projection_def(current_face_obj, projection_def,
                                             transformation: unit_transformation,
                                             unit_transformation: unit_transformation,
                                             unit_sign: unit_sign)
                 end
-                if(faces_type[count] == "PART_DRAWING_TYPE_2D_TOP")
+                if(face_name == "PART_DRAWING_TYPE_2D_TOP")
                     json_obj['size'] = current_face_obj['size']
                     json_obj['origin'] = current_face_obj['origin']
                     json_obj['unit_sign'] = current_face_obj['unit_sign']
@@ -187,17 +174,13 @@ module Ladb::OpenCutList
 
       require_relative '../../utils/transformation_utils'
 
-      flipped = TransformationUtils.flipped?(transformation)
-      rot_x, rot_y, rot_z = TransformationUtils.euler_angles(transformation)
       face_obj['works'] = []
       projection_def.layer_defs.sort_by { |v| [ v.type_outer? ? 0 : v.depth, v.type_paths? ? 1 : 0 ] }.each do |layer_def| 
-        z = _get_value(Geom::Point3d.new(layer_def.depth, 0).transform(unit_transformation).x)
+        layer_depth = _get_value(Geom::Point3d.new(layer_def.depth, 0).transform(unit_transformation).x)
         if layer_def.type_outer? || layer_def.depth == 0
-          face_obj['size']['thickness'] = z
+          face_obj['size']['thickness'] = layer_depth
           next
         end
-
-        data = []
 
         layer_def.poly_defs.each do |poly_def|
           if poly_def.curve_def
@@ -222,44 +205,31 @@ module Ladb::OpenCutList
               r = _get_value(radius.x)
               face_obj['works'] << {
                 'type' => 'hole', 
-                'x' => x1+r,
+                'x' => x1 + r,
                 'y' => y1,
-                'z' => -z,
-                'd' => r*2
+                'z' => -layer_depth,
+                'd' => r * 2
               }
-
             else
-
               # Extract loop points from ordered edges and arc curves
               portion_setup = []
-
-              depth = Geom::Point3d.new(layer_def.depth, 0).transform(unit_transformation)
-
+              # depth = Geom::Point3d.new(layer_def.depth, 0).transform(unit_transformation)
               poly_def.curve_def.portions.map.with_index { |portion, index|
                 start_point = portion.start_point.transform(transformation)
                 end_point = portion.end_point.transform(transformation)
                 x = _get_value(start_point.x)
                 y = _get_value(start_point.y)
-
                 if(index == 0)
-
                   portion_setup << {
                     "type" => "L01",
                     "x" => x, 
                     "y" => y,
-                    "z" => -z
+                    "z" => -layer_depth
                   }
                 end
-
                 if portion.is_a?(Geometrix::ArcCurvePortionDef)
-
-                  radius = Geom::Point3d.new(
-                    portion.ellipse_def.xradius,
-                    portion.ellipse_def.yradius
-                  ).transform(unit_transformation)
-
+                  radius = Geom::Point3d.new(portion.ellipse_def.xradius, portion.ellipse_def.yradius).transform(unit_transformation)
                   middle = portion.mid_point.transform(transformation)
-
                   rx = _get_value(radius.x)
                   ry = _get_value(radius.y)
                   xrot = -portion.ellipse_def.angle.radians.round(3)
@@ -269,41 +239,35 @@ module Ladb::OpenCutList
                   y1 = _get_value(-middle.y)
                   x2 = _get_value(end_point.x)
                   y2 = _get_value(-end_point.y)
-
                   portion_setup << {
-                    "type" => "A11", 
-                    "rx" => rx,
-                    "ry" => ry,
-                    "z" => -z, 
-                    "xrot" => xrot, 
-                    "lflag" => lflag, 
-                    "sflag" => sflag, 
-                    "x1" => x1, 
-                    "y1" => -y1, 
-                    "x" => x2,
-                    "y" => -y2
+                    'type' => "A11", 
+                    'rx' => rx,
+                    'ry' => ry,
+                    'z' => -layer_depth, 
+                    'xrot' => xrot, 
+                    'lflag' => lflag, 
+                    'sflag' => sflag, 
+                    'x1' => x1, 
+                    'y1' => -y1, 
+                    'x' => x2,
+                    'y' => -y2
                   }
                 else
                   x = _get_value(end_point.x)
                   y = _get_value(end_point.y)
-                  # puts "PATH > x: #{x}, y: #{y}, z: #{_processor_value(depth.x)}"
                   portion_setup << {
                     "type" => "L01", 
                     "x" => x, 
                     "y" => y,
-                    "z" => -z
+                    "z" => -layer_depth
                   }
-                end     
+                end
               }
-              face_obj['works'] << { "type" => "setup", "datas" => portion_setup }
+              face_obj['works'] << {
+                'type' => "path", 
+                'datas' => portion_setup 
+              }
             end
-          # else
-            # Extract loop points from vertices (quicker)
-            # data << "M #{poly_def.points.map { |point|
-            #   point = point.transform(transformation)
-            #   point.y *= -1
-            #   "#{_get_value(point.x)},#{_get_value(point.y)}"
-            # }.join(' L ')}#{poly_def.curve_def.closed? ? 'Z' : ''}"
           end
         end
       end

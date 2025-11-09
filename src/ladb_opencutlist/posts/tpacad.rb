@@ -19,10 +19,10 @@ module Ladb::OpenCutList
       @folder_path = @part["folder_path"]
       @sides = @part["faces"]
       @flipped = @part["flipped"]
+      @content_layers = @part["content_layer"]
     end
 
     def run
-      puts "Processing part #{@part["id"]} with #{PROCESSOR_NAME} v#{PROCESSOR_VERSION}"
       filename = "#{@number}_#{@name}_#{@width}x#{@height} (x#{@count})"
       file_path = File.join(@folder_path, "#{filename}.#{PROCESSOR_EXTENSION}")
       File.open(file_path, "w:ISO-8859-1") do |file|
@@ -71,15 +71,8 @@ module Ladb::OpenCutList
     end
 
     def _process_sides(file)
-      puts "Processing sides..."
       return if @sides.nil?
-      if @flipped
-        puts "flipped=true"
-        reorder = REORDER_SIDE_FLIPPED 
-      else
-        puts "flipped=false"
-        reorder = REORDER_SIDES
-      end
+      reorder = (@flipped) ? REORDER_SIDE_FLIPPED : REORDER_SIDES
       reorder.each_with_index do |side, index|
         next if side.nil?
         next unless @sides.key?(side)
@@ -113,7 +106,7 @@ module Ladb::OpenCutList
           tp = (thickness+z<=0) ? 1 : 0
           str = getTpaHole( 0, x, y, z, td, tp ) 
           file.puts(str)
-        when "setup"
+        when "path"
           work["datas"].each_with_index do |point, i|
             next_point = work["datas"][i + 1]
             break unless next_point # stop avant la fin
@@ -129,7 +122,6 @@ module Ladb::OpenCutList
               cleaned = str.gsub(/#\d+=\s*(?=(#|\}|$))/, "")
               file.puts(cleaned)
             when "A11"
-              puts point
               ew = (next_point["sflag"]==0) ? 1 : 0
               u = next_point["rx"]
               str = getTpaA11(0, _trunc(xi), _trunc(yi), _trunc(zi), _trunc(x), _trunc(y), _trunc(z), ew, u)
@@ -180,6 +172,17 @@ module Ladb::OpenCutList
       return "W#2111{ ::WTa  #8015=0 #8121=#{xi} #8122=#{yi} #8123=#{zi} #1=#{x} #2=#{y} #3=#{z} #34=#{ew} #8017=#{u} #8050=0 #42=0 #49=0 }W"
     end
 
+    def getTpaBladex(x, xf, y, z, sl, dn)
+      # BLADEX
+      # #8020 [X] // x de départ
+      # #8517 [XF] // x de terminaion
+      # #8021 [Y] // y
+      # #8022 [Z] // z
+      # #8503 [SL] // largeur rainure
+      # #8525 [dn] // correction 0:Arrêt 1:Gauche 2:Droite
+      return "W#1050{ ::WT2 WS=1  #8098=..\\custom\\mcr\\lame.tmcr #6=1 #8020=#{x} #8021=#{y} #8022=#{z} #9505=0 #8503=#{sl} #8509=0 #8514=1 #8515=1 #8516=2001 #8517=#{xf} #8525=#{dn} #8526=0 #8527=0 }W"
+    end
+
     #Utilitaires
     def _invert_positionx(side)
       width = side["size"]["width"]
@@ -219,7 +222,7 @@ module Ladb::OpenCutList
         (value - t).abs <= tolerance
       end
       # Retourne le tool trouvé ou nil
-      tool || v
+      tool || value
     end
 
     def _trunc(value, decimals = 2)
@@ -228,6 +231,5 @@ module Ladb::OpenCutList
       truncated = (value.to_f * factor).floor / factor.to_f
       truncated % 1 == 0 ? truncated.to_i : truncated
     end
-
   end
 end
