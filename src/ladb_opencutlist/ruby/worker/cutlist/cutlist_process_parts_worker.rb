@@ -11,6 +11,7 @@ module Ladb::OpenCutList
       path: ,
       part_ids: ,
       processor: ,
+      update: ,
       unit: Length::Millimeter
     )
       @cutlist = cutlist
@@ -18,6 +19,7 @@ module Ladb::OpenCutList
       @part_ids = part_ids
       @processor = processor
       @unit = unit
+      @update = update
     end
 
     def run
@@ -63,14 +65,16 @@ module Ladb::OpenCutList
           }
           begin
             unless folder_names.include?(folder_name)
-              if File.exist?(folder_path)
+              if File.exist?(folder_path) && !@update
                 if UI.messagebox(PLUGIN.get_i18n_string('core.messagebox.dir_override', { :target => folder_name, :parent => File.basename(dir) }), MB_YESNO) == IDYES
-                  FileUtils.remove_dir(folder_path, true)
+                    FileUtils.remove_dir(folder_path, true)
                 else
-                  return { :cancelled => true }
+                    return { :cancelled => true }
                 end
               end
-              Dir.mkdir(folder_path)
+              if !File.exist?(folder_path)
+                Dir.mkdir(folder_path)
+              end
               folder_names << folder_name
             end
             count = 0

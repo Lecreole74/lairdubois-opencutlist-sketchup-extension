@@ -25,6 +25,7 @@ default:
   regenerate: Regénérer
   print: Imprimer
   export: Exporter
+  update: Mettre à jour
   import: Importer
   load: Charger
   preview: Aperçu

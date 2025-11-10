@@ -2286,6 +2286,7 @@
             const $selectProcessor = $('#ladb_select_processor', $modal);
             const $selectUnit = $('#ladb_select_unit', $modal);
             const $btnExport = $('#ladb_btn_export', $modal);
+            const $btnExportUpdate = $('#ladb_btn_export_update', $modal);
 
             rubyCallCommand('cutlist_get_processors', {}, function (response) {   
                 $selectProcessor.empty();
@@ -2323,6 +2324,13 @@
                 fnFillInputs(writeProcessOptions);
                 // Bind buttons
                 $btnExport.on('click', function () {
+                    fnExecuteExport(false);
+                });
+                $btnExportUpdate.on('click', function () {
+                    fnExecuteExport(true);
+                });
+
+                const fnExecuteExport = function (update) {
                     // Fetch options
                     fnFetchOptions(writeProcessOptions);
                     // Store options
@@ -2331,6 +2339,7 @@
                     rubyCallCommand('cutlist_process_parts', $.extend({
                         part_ids: partIds,
                         path: $selectProcessor.children(':selected').attr('path'),
+                        update: update
                     }, writeProcessOptions), function (response) {
 
                         if (response.errors) {
@@ -2349,7 +2358,7 @@
 
                     // Hide modal
                     $modal.modal('hide');
-                });
+                };
 
                 $selectProcessor
                     .selectpicker(SELECT_PICKER_OPTIONS)

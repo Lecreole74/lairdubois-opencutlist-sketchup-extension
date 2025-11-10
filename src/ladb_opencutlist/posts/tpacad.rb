@@ -1,5 +1,5 @@
 module Ladb::OpenCutList
-  class CutlistProcessPartWorker   # <= ici module → class
+  class CutlistProcessPartWorker
     PROCESSOR_NAME = "Tpacad"
     PROCESSOR_VERSION = "1.0.0"
     PROCESSOR_EXTENSION = "tcn"
@@ -19,7 +19,7 @@ module Ladb::OpenCutList
       @folder_path = @part["folder_path"]
       @sides = @part["faces"]
       @flipped = @part["flipped"]
-      @content_layers = @part["content_layer"]
+      @content_layers = @part["content_layers"]
     end
 
     def run
@@ -107,7 +107,13 @@ module Ladb::OpenCutList
           str = getTpaHole( 0, x, y, z, td, tp ) 
           file.puts(str)
         when "path"
-          work["datas"].each_with_index do |point, i|
+          bladex = analyze_rectangle(@content_layers, work["datas"])
+          if(bladex)
+            str = getTpaBLADEX(_trunc(bladex['x']), _trunc(bladex['xf']), _trunc(bladex['y']), _trunc(bladex['z']), _trunc(bladex['sl']), bladex['dn'])
+            cleaned = str.gsub(/#\d+=\s*(?=(#|\}|$))/, "")
+            file.puts(cleaned)
+          else
+            work["datas"].each_with_index do |point, i|
             next_point = work["datas"][i + 1]
             break unless next_point # stop avant la fin
             xi = (i==0) ? _inv_x(point["x"]) : ""
@@ -117,16 +123,17 @@ module Ladb::OpenCutList
             y = _inv_y(next_point["y"])
             z = next_point["z"]
             case next_point["type"]
-            when "L01"
-              str = getTpaL01(0, _trunc(xi), _trunc(yi), _trunc(zi), _trunc(x), _trunc(y), _trunc(z))
-              cleaned = str.gsub(/#\d+=\s*(?=(#|\}|$))/, "")
-              file.puts(cleaned)
-            when "A11"
-              ew = (next_point["sflag"]==0) ? 1 : 0
-              u = next_point["rx"]
-              str = getTpaA11(0, _trunc(xi), _trunc(yi), _trunc(zi), _trunc(x), _trunc(y), _trunc(z), ew, u)
-              cleaned = str.gsub(/#\d+=\s*(?=(#|\}|$))/, "")
-              file.puts(cleaned)
+              when "L01"
+                str = getTpaL01(0, _trunc(xi), _trunc(yi), _trunc(zi), _trunc(x), _trunc(y), _trunc(z))
+                cleaned = str.gsub(/#\d+=\s*(?=(#|\}|$))/, "")
+                file.puts(cleaned)
+              when "A11"
+                ew = (next_point["sflag"]==0) ? 1 : 0
+                u = next_point["rx"]
+                str = getTpaA11(0, _trunc(xi), _trunc(yi), _trunc(zi), _trunc(x), _trunc(y), _trunc(z), ew, u)
+                cleaned = str.gsub(/#\d+=\s*(?=(#|\}|$))/, "")
+                file.puts(cleaned)
+              end
             end
           end
         end
@@ -172,7 +179,7 @@ module Ladb::OpenCutList
       return "W#2111{ ::WTa  #8015=0 #8121=#{xi} #8122=#{yi} #8123=#{zi} #1=#{x} #2=#{y} #3=#{z} #34=#{ew} #8017=#{u} #8050=0 #42=0 #49=0 }W"
     end
 
-    def getTpaBladex(x, xf, y, z, sl, dn)
+    def getTpaBLADEX(x, xf, y, z, sl, dn)
       # BLADEX
       # #8020 [X] // x de départ
       # #8517 [XF] // x de terminaion
@@ -205,15 +212,11 @@ module Ladb::OpenCutList
     end
 
     def _inv_x(value)
-      x = value.to_f
-      new_x = @width - x
-      return new_x
+      @width - value.to_f
     end
 
     def _inv_y(value)
-      y = value.to_f
-      new_y = @height - y
-      return new_y
+      @height - value.to_f
     end
 
     def _find_diameter(value, tolerance = 0.2)
@@ -231,5 +234,54 @@ module Ladb::OpenCutList
       truncated = (value.to_f * factor).floor / factor.to_f
       truncated % 1 == 0 ? truncated.to_i : truncated
     end
+
+    def extract_bladex_params(layers)
+      layer = layers.find { |l| l.start_with?("BLADEX") }
+      return nil unless layer
+
+      if (match = layer.match(/BLADEX_Z(?<z>[-\d.]+)_SL(?<sl>[-\d.]+)/))
+        { Z: match[:z].to_f, SL: match[:sl].to_f }
+      else
+        nil
+      end
+    end
+
+    def analyze_rectangle(layers, portion_setup)
+      # 1️⃣ Extraire Z et SL à partir de layers
+      match = layers.find { |l| l.start_with?("BLADEX") }&.match(/BLADEX_Z(?<z>[-\d.]+)_SL(?<sl>[-\d.]+)/)
+      return nil unless match
+
+      z = match[:z].to_f
+      sl = match[:sl].to_f
+      # 2️⃣ Vérifier que les points sont tous sur le même plan Z
+      return nil unless portion_setup.all? { |p| p["z"].to_f == -z }
+      # 3️⃣ Extraire les valeurs uniques de X et Y
+      xs = portion_setup.map { |p| p["x"] }.uniq.sort
+      ys = portion_setup.map { |p| p["y"] }.uniq.sort
+      # Doit former un rectangle → 2 valeurs uniques pour X et Y
+      return nil unless xs.size == 2 && ys.size == 2
+      largeur_x = (xs[1] - xs[0]).abs
+      largeur_y = (ys[1] - ys[0]).abs
+
+      tolerance = 0.2
+      largeur = [largeur_x, largeur_y].min
+      return nil unless (sl - largeur).abs < tolerance
+
+      first_line = portion_setup.first
+      second_line = portion_setup[1]
+      return nil unless first_line && second_line
+
+      dn = second_line["x"] < first_line["x"] ? "1" : "2"
+
+      {
+        'x' => second_line["x"],
+        'y' => _inv_y(first_line["y"]),
+        'z' => -z,
+        'sl' => sl,
+        'xf' => first_line["x"],
+        'dn' => dn
+      }
+    end
+
   end
 end
