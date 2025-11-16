@@ -10,20 +10,21 @@ module Ladb::OpenCutList
 
     def initialize(part: nil)
       @part = part
-      @width = _trunc(@part["size"]["width"])
-      @height = _trunc(@part["size"]["height"])
-      @thickness = _trunc(@part["size"]["thickness"])
-      @number = @part["number"]
-      @name = @part["name"]
-      @count = @part["count"]
-      @folder_path = @part["folder_path"]
-      @sides = @part["faces"]
-      @flipped = @part["flipped"]
-      @content_layers = @part["content_layers"]
+      @width = _trunc(part["size"]["width"])
+      @height = _trunc(part["size"]["height"])
+      @thickness = _trunc(part["size"]["thickness"])
+      @number = part["number"]
+      @tags = part["tags"]
+      @name = part["name"]
+      @count = part["count"]
+      @folder_path = part["folder_path"]
+      @sides = part["faces"]
+      @flipped = part["flipped"]
+      @content_layers = part["content_layers"]
     end
 
     def run
-      filename = "#{@number}_#{@name}_#{@width}x#{@height} (x#{@count})"
+      filename = "#{@part["number"]}_#{@name}_#{@width}x#{@height} (x#{@count})"
       file_path = File.join(@folder_path, "#{filename}.#{PROCESSOR_EXTENSION}")
       File.open(file_path, "w:ISO-8859-1") do |file|
         _writeHeader(file)
@@ -79,7 +80,7 @@ module Ladb::OpenCutList
         _writeToolToSide(file, @sides[side], index)
       end
     end
-
+    
     def _writeToolToSide(file, side, side_number)
       if side_number==3 || side_number==4
         side = _invert_positionx(side)
@@ -114,15 +115,15 @@ module Ladb::OpenCutList
             file.puts(cleaned)
           else
             work["datas"].each_with_index do |point, i|
-            next_point = work["datas"][i + 1]
-            break unless next_point # stop avant la fin
-            xi = (i==0) ? _inv_x(point["x"]) : ""
-            yi = (i==0) ? _inv_y(point["y"]) : ""
-            zi = (i==0) ? point["z"] : ""
-            x = _inv_x(next_point["x"])
-            y = _inv_y(next_point["y"])
-            z = next_point["z"]
-            case next_point["type"]
+              next_point = work["datas"][i + 1]
+              break unless next_point # stop avant la fin
+              xi = (i==0) ? _inv_x(point["x"]) : ""
+              yi = (i==0) ? _inv_y(point["y"]) : ""
+              zi = (i==0) ? point["z"] : ""
+              x = _inv_x(next_point["x"])
+              y = _inv_y(next_point["y"])
+              z = next_point["z"]
+              case next_point["type"]
               when "L01"
                 str = getTpaL01(0, _trunc(xi), _trunc(yi), _trunc(zi), _trunc(x), _trunc(y), _trunc(z))
                 cleaned = str.gsub(/#\d+=\s*(?=(#|\}|$))/, "")

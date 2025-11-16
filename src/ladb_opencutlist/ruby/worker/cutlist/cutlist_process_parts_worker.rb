@@ -7,6 +7,7 @@ module Ladb::OpenCutList
   class CutlistProcessPartsWorker
     include SanitizerHelper
     include PartDrawingHelper
+
     def initialize(cutlist,
       path: ,
       part_ids: ,
@@ -36,7 +37,6 @@ module Ladb::OpenCutList
       dir = UI.select_directory(title: PLUGIN.get_i18n_string('tab.cutlist.write.title'), directory: '')
       if dir
         folder_names = []
-        processors_directory = File.join(PLUGIN_DIR, 'posts')
         if Ladb::OpenCutList.const_defined?(:CutlistProcessPartWorker)
           Ladb::OpenCutList.send(:remove_const, :CutlistProcessPartWorker)
         end
@@ -77,11 +77,9 @@ module Ladb::OpenCutList
               end
               folder_names << folder_name
             end
-            count = 0
 
             faces_type = ["PART_DRAWING_TYPE_2D_TOP" ,"PART_DRAWING_TYPE_2D_BOTTOM","PART_DRAWING_TYPE_2D_LEFT","PART_DRAWING_TYPE_2D_RIGHT", "PART_DRAWING_TYPE_2D_FRONT","PART_DRAWING_TYPE_2D_BACK"]
 
-            # 6.times do |i|
             faces_type.each_with_index do |face_name, i|
               face_number = i + 1
               json_obj['faces'][face_name] = {}
@@ -181,6 +179,13 @@ module Ladb::OpenCutList
       face_obj['works'] = []
       projection_def.layer_defs.sort_by { |v| [ v.type_outer? ? 0 : v.depth, v.type_paths? ? 1 : 0 ] }.each do |layer_def| 
         layer_depth = _get_value(Geom::Point3d.new(layer_def.depth, 0).transform(unit_transformation).x)
+
+        puts "layer_depth:#{layer_depth}"
+        puts "layer_def.depth:#{layer_def.depth}"
+        if layer_def.type_outer?
+          puts "layer_def.type_outer"
+        end 
+        puts "**********************"
         if layer_def.type_outer? || layer_def.depth == 0
           face_obj['size']['thickness'] = layer_depth
           next
